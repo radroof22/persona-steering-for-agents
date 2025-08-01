@@ -8,6 +8,7 @@ from app.models.schema import Query, GenerateResponse, GenerateRequest, Clusters
 from app.utils.loader import load_and_validate_data, get_user_descriptions  # Keep for potential future use
 from app.services.clusterer import create_clusterer
 from app.services.llm_provider import create_llm_provider
+from app.services.prompt_summarizer import create_prompt_summarizer
 from app.services.rewriter import create_style_personalizer
 
 # Configure logging
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     try:
         app.state.clusterer = create_clusterer(eps=0.3, min_samples=2)
         app.state.llm_provider = create_llm_provider()
+        app.state.prompt_summarizer = create_prompt_summarizer(app.state.llm_provider)
         app.state.style_personalizer = create_style_personalizer(app.state.llm_provider)
         logger.info("Services initialized successfully")
     except Exception as e:
@@ -46,6 +48,11 @@ def get_clusterer(request: Request):
 def get_llm_provider(request: Request):
     """Get LLM provider service from app state."""
     return request.app.state.llm_provider
+
+
+def get_prompt_summarizer(request: Request):
+    """Get prompt summarizer service from app state."""
+    return request.app.state.prompt_summarizer
 
 
 def get_style_personalizer(request: Request):
@@ -87,7 +94,7 @@ async def health_check():
 async def generate_personalized_rewrites(
     request: GenerateRequest,
     clusterer=Depends(get_clusterer),
-    llm_provider=Depends(get_llm_provider),
+    prompt_summarizer=Depends(get_prompt_summarizer),
     style_personalizer=Depends(get_style_personalizer)
 ):
     """
@@ -96,7 +103,7 @@ async def generate_personalized_rewrites(
     Args:
         request: GenerateRequest containing users and queries to process
         clusterer: QueryClusterer service from dependency injection
-        llm_provider: LLMProvider service from dependency injection
+        prompt_summarizer: PromptSummarizer service from dependency injection
         style_personalizer: StylePersonalizer service from dependency injection
         
     Returns:
@@ -117,9 +124,9 @@ async def generate_personalized_rewrites(
         clustered_queries = clusterer.process_queries(queries)
         logger.info(f"Created {len(clustered_queries)} clusters")
         
-        # Step 2: Rewrite representative queries
-        logger.info("Rewriting representative queries...")
-        representative_rewrites = llm_provider.rewrite_multiple_queries(clustered_queries)
+        # Step 2: Generate summarized prompts for clusters
+        logger.info("Generating summarized prompts...")
+        representative_rewrites = prompt_summarizer.summarize_clusters(clustered_queries)
         
         # Step 3: Create personalized rewrites
         logger.info("Creating personalized rewrites...")

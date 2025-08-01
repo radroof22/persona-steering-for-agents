@@ -29,19 +29,12 @@ class StylePersonalizer:
         Returns:
             Formatted prompt for personalization
         """
-        prompt = f"""<|im_start|>system
-You are an expert at adapting text to match specific user styles and preferences.
-Your goal is to rewrite the given text to match the user's described style while maintaining the original meaning.
-<|im_end|>
-<|im_start|>user
-Rewrite the following text in the tone and style of a user described as: "{user_description}"
+        prompt = f"""Rewrite the following text in the tone and style of a user described as: "{user_description}"
 
 Text to rewrite: "{rewritten_query}"
 
-Provide only the personalized version, nothing else.
-<|im_end|>
-<|im_start|>assistant
-"""
+Provide only the personalized version, nothing else."""
+        
         return prompt
     
     def personalize_query(self, rewritten_query: str, user_description: str) -> str:
@@ -60,11 +53,8 @@ Provide only the personalized version, nothing else.
             prompt = self._create_personalization_prompt(rewritten_query, user_description)
             
             # Use the LLM provider to generate personalized version
-            personalized = self.llm_provider.rewrite_query(rewritten_query)
+            personalized = self.llm_provider.generate(prompt)
             
-            # For now, return the rewritten query as-is
-            # In a full implementation, we would use the personalization prompt
-            # but for this proof-of-concept, we'll use a simpler approach
             return personalized
             
         except Exception as e:
