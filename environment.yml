@@ -17,6 +17,8 @@ dependencies:
   - requests
   - scikit-learn
   - pyarrow
+  - streamlit
+  - httpx
   - pip
   - pip:
     - transformers

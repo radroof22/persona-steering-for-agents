@@ -20,7 +20,43 @@ class PromptSummarizer:
         """
         self.llm_provider = llm_provider
     
-    def summarize_clusters(self, clustered_queries: List[ClusteredQuery]) -> List[str]:
+    def summarize_cluster(self, cluster: ClusteredQuery) -> str:
+        """
+        Generate a summarized query for a single cluster.
+        
+        Args:
+            cluster: ClusteredQuery containing the cluster data
+            
+        Returns:
+            str: Summarized query that represents all queries in the cluster
+        """
+        logger.info(f"Summarizing cluster {cluster.cluster_id} with {len(cluster.queries)} queries")
+        
+        # Extract all query texts from the cluster
+        query_texts = [query.question for query in cluster.queries]
+        
+        # Create a prompt to summarize the queries
+        summarization_prompt = f"""
+        Analyze the following related user queries and create a single, comprehensive question that captures the main intent and information needs of all queries:
+
+        Queries:
+        {chr(10).join([f"- {query}" for query in query_texts])}
+
+        Please provide a single, well-formed question that:
+        1. Captures the common theme across all queries
+        2. Is clear and specific enough to get a comprehensive answer
+        3. Maintains the technical level and domain context
+        4. Can be answered in a way that addresses all the original queries
+
+        Summarized Question:""" if len(cluster.queries) > 1 else cluster.queries[0].question
+        
+        # Generate the summarized query
+        summarized_query = self.llm_provider.generate(summarization_prompt)
+        
+        logger.info(f"Generated summarized query for cluster {cluster.cluster_id}")
+        return summarized_query.strip()
+
+    def summarize_cluster_queries(self, clustered_queries: List[ClusteredQuery]) -> List[str]:
         """
         Generate summarization responses for query clusters.
         

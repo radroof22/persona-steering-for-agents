@@ -2,14 +2,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-from typing import List
 
-from app.models.schema import Query, GenerateResponse, GenerateRequest, ClustersRequest, ClustersResponse
-from app.utils.loader import load_and_validate_data, get_user_descriptions  # Keep for potential future use
-from app.services.clusterer import create_clusterer
-from app.services.llm_provider import create_llm_provider
-from app.services.prompt_summarizer import create_prompt_summarizer
-from app.services.rewriter import create_style_personalizer
+from app.models.schema import Query, GenerateResponse, GenerateRequest, ClustersRequest, ClustersResponse, PersonalizedQueryResponse
+from app.services.clusterer import QueryClusterer, create_clusterer
+from app.services.llm_provider import LLMProvider, create_llm_provider
+from app.services.prompt_summarizer import PromptSummarizer, create_prompt_summarizer
+from app.services.rewriter import StylePersonalizer, create_style_personalizer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,10 +22,10 @@ async def lifespan(app: FastAPI):
     
     # Initialize services and store in app.state
     try:
-        app.state.clusterer = create_clusterer(eps=0.3, min_samples=2)
-        app.state.llm_provider = create_llm_provider()
-        app.state.prompt_summarizer = create_prompt_summarizer(app.state.llm_provider)
-        app.state.style_personalizer = create_style_personalizer(app.state.llm_provider)
+        app.state.clusterer: QueryClusterer = create_clusterer(eps=0.3, min_samples=2)
+        app.state.llm_provider: LLMProvider = create_llm_provider()
+        app.state.prompt_summarizer: PromptSummarizer = create_prompt_summarizer(app.state.llm_provider)
+        app.state.style_personalizer: StylePersonalizer = create_style_personalizer(app.state.llm_provider)
         logger.info("Services initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
@@ -40,22 +38,22 @@ async def lifespan(app: FastAPI):
 
 
 # Dependency functions to get services from app.state
-def get_clusterer(request: Request):
+def get_clusterer(request: Request) -> QueryClusterer:
     """Get clusterer service from app state."""
     return request.app.state.clusterer
 
 
-def get_llm_provider(request: Request):
+def get_llm_provider(request: Request) -> LLMProvider:
     """Get LLM provider service from app state."""
     return request.app.state.llm_provider
 
 
-def get_prompt_summarizer(request: Request):
+def get_prompt_summarizer(request: Request) -> PromptSummarizer:
     """Get prompt summarizer service from app state."""
     return request.app.state.prompt_summarizer
 
 
-def get_style_personalizer(request: Request):
+def get_style_personalizer(request: Request) -> StylePersonalizer:
     """Get style personalizer service from app state."""
     return request.app.state.style_personalizer
 
@@ -95,22 +93,22 @@ async def generate_personalized_rewrites(
     request: GenerateRequest,
     clusterer=Depends(get_clusterer),
     prompt_summarizer=Depends(get_prompt_summarizer),
-    style_personalizer=Depends(get_style_personalizer)
+    style_personalizer=Depends(get_style_personalizer),
 ):
     """
-    Generate clustered queries, rewritten representatives, and personalized rewrites.
+    Orchestrate the full pipeline: clustering → summarization → personalization.
     
     Args:
         request: GenerateRequest containing users and queries to process
-        clusterer: QueryClusterer service from dependency injection
-        prompt_summarizer: PromptSummarizer service from dependency injection
-        style_personalizer: StylePersonalizer service from dependency injection
+        clusterer: QueryClusterer service
+        prompt_summarizer: PromptSummarizer service
+        style_personalizer: StylePersonalizer service
+        llm_provider: LLMProvider service
         
     Returns:
-        GenerateResponse with clustered queries, representative rewrites, and personalized rewrites
+        GenerateResponse with list of PersonalizedQueryResponse objects
     """
     try:
-        # Extract data from request payload
         users = request.users
         queries = request.queries
         
@@ -119,39 +117,115 @@ async def generate_personalized_rewrites(
         
         logger.info(f"Processing {len(queries)} queries for {len(users)} users...")
         
-        # Step 1: Cluster queries
-        logger.info("Clustering queries...")
+        # Step 1: Cluster queries directly using the service
+        logger.info("Step 1: Clustering queries...")
         clustered_queries = clusterer.process_queries(queries)
-        logger.info(f"Created {len(clustered_queries)} clusters")
+        logger.info(f"Created {len(clustered_queries)} clusters from {len(queries)} queries")
         
-        # Step 2: Generate summarized prompts for clusters
-        logger.info("Generating summarized prompts...")
-        representative_rewrites = prompt_summarizer.summarize_clusters(clustered_queries)
+        # Step 2: For each cluster, summarize queries and answer summarized question using the service
+        logger.info("Step 2: Summarizing clusters...")
+        cluster_summaries = {}
+        for cluster in clustered_queries:
+            try:
+                # Call the service method directly
+                summarized_query = prompt_summarizer.summarize_cluster(cluster)
+                summarized_response = f"Summary for cluster {cluster.cluster_id}: {summarized_query}"
+                
+                cluster_summaries[cluster.cluster_id] = {
+                    "summarized_query": summarized_query,
+                    "summarized_response": summarized_response,
+                    "success": True,
+                    "error_message": None
+                }
+            except Exception as e:
+                logger.error(f"Failed to summarize cluster {cluster.cluster_id}: {e}")
+                cluster_summaries[cluster.cluster_id] = {
+                    "summarized_query": "",
+                    "summarized_response": "",
+                    "success": False,
+                    "error_message": str(e)
+                }
         
-        # Step 3: Create personalized rewrites
-        logger.info("Creating personalized rewrites...")
-        all_queries = []
-        all_rewritten_queries = []
+        # Step 3: For each original query, personalize using the service
+        logger.info("Step 3: Personalizing responses...")
+        results = []
         
-        for clustered_query, rewritten_query in zip(clustered_queries, representative_rewrites):
-            # For each query in the cluster, use the rewritten representative
-            for query in clustered_query.queries:
-                all_queries.append(query)
-                all_rewritten_queries.append(rewritten_query)
+        for cluster in clustered_queries:
+            cluster_summary = cluster_summaries[cluster.cluster_id]
+
+            if len(cluster.queries) == 1:
+                results.append(
+                    PersonalizedQueryResponse(
+                        original_query=cluster.queries[0].question,
+                        user_id=cluster.queries[0].user_id,
+                        cluster_id=cluster.cluster_id,
+                        summarized_query=cluster_summary["summarized_query"],
+                        summarized_response=cluster_summary["summarized_response"],
+                        personalized_response=cluster_summary["summarized_response"],
+                        success=True,
+                        error_message=None
+                    )
+                )
+                continue
+            
+            for query in cluster.queries:
+                try:
+                    if cluster_summary["success"]:
+                        # Get user description
+                        user_description = user_descriptions.get(query.user_id, "")
+                        
+                        # Call the service method directly
+                        personalized_response = style_personalizer.personalize_response(
+                            original_query=query.question,
+                            user_description=user_description,
+                            summarized_query=cluster_summary["summarized_query"],
+                            summarized_response=cluster_summary["summarized_response"]
+                        )
+                        
+                        # Create successful result
+                        result = PersonalizedQueryResponse(
+                            original_query=query.question,
+                            user_id=query.user_id,
+                            cluster_id=cluster.cluster_id,
+                            summarized_query=cluster_summary["summarized_query"],
+                            summarized_response=cluster_summary["summarized_response"],
+                            personalized_response=personalized_response,
+                            success=True
+                        )
+                    else:
+                        # Summarization failed
+                        result = PersonalizedQueryResponse(
+                            original_query=query.question,
+                            user_id=query.user_id,
+                            cluster_id=cluster.cluster_id,
+                            summarized_query="",
+                            summarized_response="",
+                            personalized_response="",
+                            success=False,
+                            error_message=f"Summarization failed: {cluster_summary['error_message']}"
+                        )
+                    
+                    results.append(result)
+                    
+                except Exception as e:
+                    logger.error(f"Error processing query '{query.question}': {e}")
+                    # Add failed result
+                    result = PersonalizedQueryResponse(
+                        original_query=query.question,
+                        user_id=query.user_id,
+                        cluster_id=cluster.cluster_id,
+                        summarized_query="",
+                        summarized_response="",
+                        personalized_response="",
+                        success=False,
+                        error_message=str(e)
+                    )
+                    results.append(result)
         
-        personalized_rewrites = style_personalizer.create_personalized_rewrites(
-            all_queries, all_rewritten_queries, user_descriptions
-        )
-        
-        logger.info(f"Generated {len(personalized_rewrites)} personalized rewrites")
+        logger.info(f"Generated {len(results)} personalized query responses")
         
         # Create response
-        response = GenerateResponse(
-            clustered_queries=clustered_queries,
-            representative_rewrites=representative_rewrites,
-            personalized_rewrites=personalized_rewrites
-        )
-        
+        response = GenerateResponse(results=results)
         return response
         
     except Exception as e:
@@ -174,16 +248,7 @@ async def get_clusters(
         
         clustered_queries = clusterer.process_queries(queries)
         
-        clusters_data = [
-            {
-                "cluster_id": cq.cluster_id,
-                "user_ids": cq.user_ids,
-                "query_count": len(cq.queries)
-            }
-            for cq in clustered_queries
-        ]
-        
-        response = ClustersResponse(clusters=clusters_data)
+        response = ClustersResponse(clusters=clustered_queries)
         return response
         
     except Exception as e:

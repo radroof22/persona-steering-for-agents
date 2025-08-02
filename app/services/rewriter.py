@@ -37,6 +37,49 @@ Provide only the personalized version, nothing else."""
         
         return prompt
     
+    def personalize_response(
+        self, 
+        original_query: str,
+        user_description: str, 
+        summarized_query: str, 
+        summarized_response: str
+    ) -> str:
+        """
+        Personalize a response for a specific user and original query.
+        
+        Args:
+            original_query: The user's original question
+            user_description: User's description for personalization
+            summarized_query: The summarized query for the cluster
+            summarized_response: The LLM response to the summarized query
+            
+        Returns:
+            Personalized response tailored to the user and original query
+        """
+        logger.info(f"Personalizing response for user query: {original_query[:50]}...")
+        
+        personalization_prompt = f"""
+        You are a helpful assistant that personalizes responses based on user context.
+        
+        User Description: {user_description}
+        Original User Question: {original_query}
+        Cluster Summary Question: {summarized_query}
+        General Response: {summarized_response}
+        
+        Please provide a personalized response that:
+        1. Directly addresses the user's original question
+        2. Is tailored to their background and expertise level
+        3. Uses the general response as a foundation but adapts it for this specific user
+        4. Maintains the tone and style appropriate for the user's description
+        5. Focuses on aspects most relevant to the user's context
+        
+        Personalized Response:"""
+        
+        personalized_response = self.llm_provider.generate(personalization_prompt)
+        
+        logger.info(f"Generated personalized response")
+        return personalized_response.strip()
+
     def personalize_query(self, rewritten_query: str, user_description: str) -> str:
         """
         Personalize a rewritten query based on user description.

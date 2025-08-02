@@ -68,6 +68,9 @@ class LLMProvider:
             # Move to device
             if self.device == "cuda":
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            logger.info(f"[LLM] Query: {prompt}")
+            
             
             # Generate response
             with torch.no_grad():
@@ -83,6 +86,8 @@ class LLMProvider:
             
             # Decode response
             full_response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+            logger.info(f"[LLM] Generated response: {full_response}")
             
             # Extract only the generated part (after the prompt)
             generated_text = full_response[len(prompt):].strip()
@@ -120,5 +125,5 @@ def create_llm_provider(model_name: Optional[str] = None) -> LLMProvider:
     """
     if model_name is None:
         model_name = "gpt2"
-    
+    logger.info(f"[LLM] Using model: {model_name}")
     return LLMProvider(model_name=model_name) 
