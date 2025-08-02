@@ -106,6 +106,8 @@ def main():
         st.session_state.results = None
     if 'show_developer_output' not in st.session_state:
         st.session_state.show_developer_output = False
+    if 'processing' not in st.session_state:
+        st.session_state.processing = False
     
     # Header
     st.title("🧠 Clustered Prompt Personalization Demo")
@@ -207,11 +209,10 @@ def show_landing_page(api_client: APIClient):
         help="Additional strategies coming soon"
     )
     
-    # Processing time warning
-    st.info("⏱️ **Note:** Processing may take 1-2 minutes on CPU. The system will cluster your queries and generate personalized rewrites for each user.")
+    
     
     # Submit button
-    if st.button("🚀 Process Prompts", type="primary"):
+    if st.button("🚀 Process Prompts", type="primary", disabled=st.session_state.processing):
         if st.session_state.users_df is None:
             st.error("Please upload a users CSV file.")
             return
@@ -236,7 +237,19 @@ def show_landing_page(api_client: APIClient):
             st.error(f"❌ Queries file error: {queries_error}")
             return
         
+        # Set processing state
+        st.session_state.processing = True
+        st.rerun()
+    
+    # Processing section
+    if st.session_state.processing:
+        st.markdown("---")
+        st.subheader("🔄 Processing Your Prompts")
+        st.info("⏱️ **Note:** Processing may take 1-2 minutes on CPU. The system will cluster your queries and generate personalized rewrites for each user.")
+        
         # Process data for API
+        users_df = st.session_state.users_df
+        queries_df = st.session_state.queries_df
         users, queries = process_separate_csv_data(users_df, queries_df)
         
         # Show processing status
@@ -250,6 +263,7 @@ def show_landing_page(api_client: APIClient):
                 st.session_state.results = results
                 st.session_state.users_df = users_df
                 st.session_state.queries_df = queries_df
+                st.session_state.processing = False
                 
                 # Redirect to results page
                 st.rerun()
@@ -257,6 +271,8 @@ def show_landing_page(api_client: APIClient):
             except Exception as e:
                 st.error(f"❌ Error processing prompts: {str(e)}")
                 logger.error(f"API call failed: {e}")
+                st.session_state.processing = False
+                st.rerun()
 
 
 
@@ -301,14 +317,57 @@ def show_results_page(api_client: APIClient):
                 clusters_dict[cluster_id] = []
             clusters_dict[cluster_id].append(result)
         
-        # Display each cluster
+        # Separate unique queries from regular clusters
+        unique_queries = []
+        regular_clusters = {}
+        
         for cluster_id, cluster_results in clusters_dict.items():
-            # Special handling for cluster -1 (unique/outlier queries)
-            if cluster_id == -1:
-                cluster_title = f"⚠️ Unique Queries ({len(cluster_results)} queries)"
-                st.warning("⚠️ **Note:** These queries couldn't be grouped with others. They're processed individually, which is less efficient than grouped processing.")
+            if len(cluster_results) == 1:
+                # Collect all unique queries
+                unique_queries.extend(cluster_results)
             else:
-                cluster_title = f"Cluster {cluster_id} ({len(cluster_results)} queries)"
+                # Keep regular clusters as they are
+                regular_clusters[cluster_id] = cluster_results
+        
+        # Display unique queries in one expander
+        if unique_queries:
+            st.warning("⚠️ **Note:** These queries couldn't be grouped with others. They're processed individually, which is less efficient than grouped processing.")
+            
+            with st.expander(f"⚠️ Unique Queries ({len(unique_queries)} queries)", expanded=True):
+                for result in unique_queries:
+                    original_query = result.get('original_query', 'N/A')
+                    summarized_query = result.get('summarized_query', 'N/A')
+                    summarized_response = result.get('summarized_response', 'N/A')
+                    personalized_response = result.get('personalized_response', 'N/A')
+                    success = result.get('success', False)
+                    error_message = result.get('error_message', '')
+                    user_id = result.get('user_id', 'Unknown')
+                    
+                    # Display query result
+                    if success:
+                        st.markdown(f"""
+                        <div class="unique-query-container">
+                            <span class="unique-indicator">⚠️ UNIQUE QUERY</span><br>
+                            <strong>User:</strong> {user_id}<br>
+                            <strong>Original Query:</strong> {original_query}<br>
+                            <strong>Cluster Summary:</strong> {summarized_query}<br>
+                            <strong>General Response:</strong> {summarized_response}<br>
+                            <strong>Personalized Response:</strong> {personalized_response}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div class="error-container">
+                            <span class="error-indicator">❌ FAILED</span><br>
+                            <strong>User:</strong> {user_id}<br>
+                            <strong>Original Query:</strong> {original_query}<br>
+                            <strong>Error:</strong> {error_message}
+                        </div>
+                        """, unsafe_allow_html=True)
+        
+        # Display regular clusters
+        for cluster_id, cluster_results in regular_clusters.items():
+            cluster_title = f"Cluster {cluster_id} ({len(cluster_results)} queries)"
             
             with st.expander(cluster_title, expanded=True):
                 for result in cluster_results:
@@ -322,16 +381,9 @@ def show_results_page(api_client: APIClient):
                     
                     # Display query result
                     if success:
-                        # Use special styling for unique queries (cluster -1)
-                        container_class = "unique-query-container" if cluster_id == -1 else "query-container"
-                        if cluster_id == -1:
-                            status_indicator = '<span class="unique-indicator">⚠️ UNIQUE QUERY</span>'
-                        else:
-                            status_indicator = '<span class="success-indicator">✅ SUCCESS</span>'
-                        
                         st.markdown(f"""
-                        <div class="{container_class}">
-                            {status_indicator}<br>
+                        <div class="query-container">
+                            <span class="success-indicator">✅ SUCCESS</span><br>
                             <strong>User:</strong> {user_id}<br>
                             <strong>Original Query:</strong> {original_query}<br>
                             <strong>Cluster Summary:</strong> {summarized_query}<br>

@@ -86,16 +86,12 @@ class QueryClusterer:
         clustered_queries = []
         
         # Process each cluster
+        max_cluster_id = max(cluster_labels)
+        next_singleton_id = max_cluster_id + 1
+        
+        # First process non-noise clusters
         for cluster_id in sorted(set(cluster_labels)):
-            if cluster_id == -1:  # Skip noise points
-                # treat each noise point as a singleton cluster
-                clustered_queries.extend([
-                    ClusteredQuery(
-                        cluster_id=int(cluster_id),
-                        user_ids=[q.user_id],
-                        queries=[q]
-                    ) for i, q in enumerate(queries) if cluster_labels[i] == -1
-                ])
+            if cluster_id == -1:  # Skip noise points for now
                 continue
                 
             # Get queries and user_ids for this cluster
@@ -110,6 +106,18 @@ class QueryClusterer:
             )
             
             clustered_queries.append(clustered_query)
+            
+        # Now process noise points as singleton clusters with unique IDs
+        for i, q in enumerate(queries):
+            if cluster_labels[i] == -1:
+                clustered_queries.append(
+                    ClusteredQuery(
+                        cluster_id=next_singleton_id,
+                        user_ids=[q.user_id],
+                        queries=[q]
+                    )
+                )
+                next_singleton_id += 1
         
         return clustered_queries
 

@@ -47,7 +47,7 @@ class LLMProvider:
                 logger.error(f"Error loading model: {e}")
                 raise
     
-    def generate(self, prompt: str, max_new_tokens: int = 50, temperature: float = 0.8) -> str:
+    def generate(self, prompt: str, max_new_tokens: int = 100, temperature: float = 0.8) -> str:
         """
         Generate a response using the LLM based on the given prompt.
         
@@ -87,25 +87,12 @@ class LLMProvider:
             # Decode response
             full_response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-            logger.info(f"[LLM] Generated response: {full_response}")
             
             # Extract only the generated part (after the prompt)
             generated_text = full_response[len(prompt):].strip()
+            logger.info(f"[LLM] Generated response: {generated_text}")
             
-            # Clean up the response
-            if generated_text:
-                # Remove any trailing punctuation or incomplete sentences
-                lines = generated_text.split('\n')
-                first_line = lines[0].strip()
-                
-                # Remove quotes if present
-                if first_line.startswith('"') and first_line.endswith('"'):
-                    first_line = first_line[1:-1]
-                
-                return first_line
-            else:
-                # Fallback to a simple response if no generation
-                return "Unable to generate response"
+            return generated_text
             
         except Exception as e:
             logger.error(f"Error generating response: {e}")
