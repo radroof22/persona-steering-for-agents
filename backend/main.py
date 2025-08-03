@@ -3,11 +3,11 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
-from app.models.schema import Query, GenerateResponse, GenerateRequest, ClustersRequest, ClustersResponse, PersonalizedQueryResponse
-from app.services.clusterer import QueryClusterer, create_clusterer
-from app.services.llm_provider import LLMProvider, create_llm_provider
-from app.services.prompt_summarizer import PromptSummarizer, create_prompt_summarizer
-from app.services.rewriter import StylePersonalizer, create_style_personalizer
+from backend.models.schema import Query, GenerateResponse, GenerateRequest, ClustersRequest, ClustersResponse, PersonalizedQueryResponse
+from backend.services.clusterer import QueryClusterer, create_clusterer
+from backend.services.llm_provider import LLMProvider, create_llm_provider
+from backend.services.prompt_summarizer import PromptSummarizer, create_prompt_summarizer
+from backend.services.rewriter import StylePersonalizer, create_style_personalizer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

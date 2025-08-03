@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple, Optional
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
-from app.models.schema import Query, ClusteredQuery
+from backend.models.schema import Query, ClusteredQuery
 
 
 class QueryClusterer:

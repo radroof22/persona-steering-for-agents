@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
-from app.models.schema import Query, PersonalizedRewrite
-from app.services.llm_provider import LLMProvider
+from backend.models.schema import Query, PersonalizedRewrite
+from backend.services.llm_provider import LLMProvider
 import logging
 
 logger = logging.getLogger(__name__)

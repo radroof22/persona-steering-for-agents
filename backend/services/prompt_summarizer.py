@@ -1,7 +1,7 @@
 from typing import List
 import logging
-from app.models.schema import ClusteredQuery
-from app.services.llm_provider import LLMProvider
+from backend.models.schema import ClusteredQuery
+from backend.services.llm_provider import LLMProvider
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

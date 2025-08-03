@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import Tuple, Dict, Any
 from pathlib import Path
-from app.models.schema import User, Query
+from backend.models.schema import User, Query
 
 
 def load_mock_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
