@@ -79,6 +79,10 @@ class QueryClusterer:
         # Extract query texts
         query_texts = [q.question for q in queries]
         
+        # Handle empty input
+        if not queries:
+            return []
+        
         # Cluster queries
         cluster_labels = self.cluster_queries(query_texts)
         
