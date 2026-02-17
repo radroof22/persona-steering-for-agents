@@ -1,6 +1,0 @@
-user_id,description
-user_001,I'm a data scientist with 5 years of experience in machine learning and Python. I work on NLP projects and am interested in transformer models and deep learning.
-user_002,I'm a software engineer transitioning into ML. I have strong programming skills in Python and Java; and I'm learning about neural networks and data preprocessing.
-user_003,I'm a research student studying computer science. I'm working on my thesis about attention mechanisms and transformer architectures. I have basic ML knowledge.
-user_004,I'm a product manager with a technical background. I need to understand ML concepts to work with data science teams. I'm interested in practical applications.
-user_005,I'm a senior ML engineer specializing in production systems. I have expertise in model deploymen; MLOps; and scaling ML applications. I work with PyTorch and TensorFlow. 
